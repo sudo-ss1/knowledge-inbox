@@ -46,7 +46,9 @@ export default function ItemList({ items, loading, error }: Props) {
           {item.error && <p className="mt-2 text-sm text-red-700">{item.error}</p>}
 
           {item.status === "ready" && (
-            <p className="mt-2 text-xs text-slate-400">{item.chunk_count} chunks indexed</p>
+            <p className="mt-2 text-xs text-slate-400">
+              {item.chunk_count} {item.chunk_count === 1 ? "chunk" : "chunks"} indexed
+            </p>
           )}
         </li>
       ))}

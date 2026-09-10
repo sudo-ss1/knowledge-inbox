@@ -28,6 +28,12 @@ describe("ItemList", () => {
     expect(screen.getByText(/3 chunks/)).toBeInTheDocument();
   });
 
+  it("says 'chunk' not 'chunks' for a single chunk", () => {
+    render(<ItemList items={[item({ chunk_count: 1 })]} loading={false} error={null} />);
+
+    expect(screen.getByText(/1 chunk indexed/)).toBeInTheDocument();
+  });
+
   it("shows the failure reason inline on a failed item", () => {
     render(
       <ItemList

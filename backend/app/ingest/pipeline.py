@@ -25,6 +25,32 @@ _TRANSIENT_EXCEPTIONS = (
 )
 
 
+def _failure_reason(exc: Exception) -> str:
+    """A message the user can act on, stored on the item and shown on the row.
+
+    Only ApiError carries a message written for a human. Everything else would
+    otherwise collapse to one useless string, and the likeliest failures here --
+    a mistyped key, a slow network, a rate limit -- are all diagnosable if we
+    say which one happened.
+    """
+    if isinstance(exc, ApiError):
+        return exc.message
+
+    status = getattr(exc, "status_code", None)
+    if status == 401 or status == 403:
+        return "The embedding API rejected the credentials. Check OPENAI_API_KEY."
+    if status == 429:
+        return "The embedding API rate-limited this request. Try again shortly."
+    if isinstance(exc, httpx.TimeoutException | httpx.ConnectError) or type(
+        exc
+    ).__name__ in {"APITimeoutError", "APIConnectionError"}:
+        return "Could not reach the embedding API. Check your network, then retry."
+    if status is not None and status >= 500:
+        return f"The embedding API returned HTTP {status}. Try again shortly."
+
+    return f"Unexpected failure while indexing ({type(exc).__name__})."
+
+
 def _is_transient(exc: Exception) -> bool:
     if isinstance(exc, _TRANSIENT_EXCEPTIONS):
         return True
@@ -82,9 +108,7 @@ class IngestPipeline:
             log.info("item_ready", item_id=item_id, chunks=len(chunks))
 
         except Exception as exc:
-            reason = (
-                exc.message if isinstance(exc, ApiError) else "Unexpected failure while indexing."
-            )
+            reason = _failure_reason(exc)
             await self._items.mark_failed(item_id, reason)
             log.error("item_failed", exc_info=exc, item_id=item_id, reason=reason)
 

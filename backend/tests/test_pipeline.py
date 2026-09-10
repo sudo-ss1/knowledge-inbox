@@ -3,7 +3,7 @@ import pytest
 
 from app.config import Settings
 from app.errors import ApiError
-from app.ingest.pipeline import IngestPipeline, recover_pending
+from app.ingest.pipeline import IngestPipeline, _failure_reason, recover_pending
 from app.ingest.queue import IngestQueue
 from app.rag.embedder import FakeEmbedder
 from app.store.db import connect
@@ -194,3 +194,69 @@ async def _noop() -> None:
 
 async def _capture(sink: list[str], item_id: str) -> None:
     sink.append(item_id)
+
+
+class _StatusError(Exception):
+    """Stands in for an OpenAI SDK error, which carries status_code."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
+
+
+class _NamedError(Exception):
+    """Stands in for openai.APITimeoutError, matched by class name."""
+
+
+_NamedError.__name__ = "APITimeoutError"
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (_StatusError(401), "Check OPENAI_API_KEY"),
+        (_StatusError(403), "Check OPENAI_API_KEY"),
+        (_StatusError(429), "rate-limited"),
+        (_StatusError(503), "HTTP 503"),
+        (httpx.ConnectTimeout("slow"), "Could not reach the embedding API"),
+        (_NamedError(), "Could not reach the embedding API"),
+        (ValueError("boom"), "Unexpected failure while indexing (ValueError)."),
+    ],
+)
+def test_failure_reason_is_actionable(exc, expected):
+    """A user reads this string on the row; it has to say which failure happened."""
+    assert expected in _failure_reason(exc)
+
+
+def test_failure_reason_prefers_an_api_errors_own_message():
+    assert _failure_reason(ApiError("fetch_failed", "Upstream returned HTTP 404.", 502)) == (
+        "Upstream returned HTTP 404."
+    )
+
+
+async def test_an_embedder_failure_surfaces_an_actionable_reason(wiring):
+    """Regression: a non-ApiError used to collapse to one useless message."""
+    items, chunks, settings = wiring
+    item = await items.create(type="note", source_url=None, title="n", raw_content="body text")
+
+    class BadKeyEmbedder:
+        @property
+        def model(self) -> str:
+            return "fake-embed"
+
+        async def embed(self, texts):
+            raise _StatusError(401)
+
+    pipeline = IngestPipeline(
+        items=items,
+        chunks=chunks,
+        embedder=BadKeyEmbedder(),
+        settings=settings,
+        fetch=_unused_fetch,
+    )
+    pipeline.retry_delay_s = 0
+    await pipeline.process(item.id)
+
+    reloaded = await items.get(item.id)
+    assert reloaded.status == "failed"
+    assert "OPENAI_API_KEY" in reloaded.error
