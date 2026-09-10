@@ -43,6 +43,7 @@ export default function AddItemForm({ onAdded }: { onAdded: () => void }) {
 
   function switchTo(next: Mode) {
     setMode(next);
+    setValue("");
     setProblem(null);
   }
 
@@ -53,6 +54,7 @@ export default function AddItemForm({ onAdded }: { onAdded: () => void }) {
           <button
             key={option}
             type="button"
+            aria-pressed={mode === option}
             onClick={() => switchTo(option)}
             className={`rounded px-3 py-1 capitalize ${
               mode === option ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"

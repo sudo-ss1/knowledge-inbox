@@ -64,6 +64,15 @@ describe("AddItemForm", () => {
     await waitFor(() => expect(field).toHaveValue(""));
   });
 
+  it("clears the field's value when switching modes", async () => {
+    render(<AddItemForm onAdded={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText(/note/i), "leftover note text");
+    await userEvent.click(screen.getByRole("button", { name: /^url$/i }));
+
+    expect(screen.getByLabelText(/url/i)).toHaveValue("");
+  });
+
   it("refuses to submit an empty note", async () => {
     render(<AddItemForm onAdded={vi.fn()} />);
 
