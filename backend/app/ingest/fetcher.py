@@ -110,7 +110,13 @@ async def safe_fetch(
 
 def _assert_supported_type(response: httpx.Response) -> None:
     content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-    if content_type and not content_type.startswith(ALLOWED_CONTENT_TYPES):
+    if not content_type:
+        raise ApiError(
+            "unsupported_content_type",
+            "That server did not declare a content type.",
+            400,
+        )
+    if not content_type.startswith(ALLOWED_CONTENT_TYPES):
         raise ApiError(
             "unsupported_content_type",
             f"Expected HTML or plain text, got '{content_type}'.",

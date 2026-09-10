@@ -110,6 +110,32 @@ async def test_follows_a_public_redirect_and_reports_the_final_url():
     assert "arrived" in body
 
 
+async def test_a_relative_redirect_resolves_against_the_current_url():
+    def handler(request):
+        if request.url.path == "/a/start":
+            return httpx.Response(302, headers={"location": "../final"})
+        return httpx.Response(200, html="<p>arrived</p>")
+
+    async with client_returning(handler) as client:
+        final_url, body = await safe_fetch(
+            "https://example.com/a/start", timeout_s=5, max_bytes=1000, client=client
+        )
+
+    assert final_url == "https://example.com/final"
+    assert "arrived" in body
+
+
+async def test_a_redirect_without_a_location_header_fails():
+    def handler(request):
+        return httpx.Response(302, headers={})
+
+    async with client_returning(handler) as client:
+        with pytest.raises(ApiError) as caught:
+            await safe_fetch("https://example.com/x", timeout_s=5, max_bytes=1000, client=client)
+
+    assert caught.value.code == "fetch_failed"
+
+
 async def test_gives_up_after_too_many_redirects():
     def handler(request):
         return httpx.Response(302, headers={"location": "https://example.com/loop"})
@@ -136,11 +162,28 @@ async def test_rejects_a_body_over_the_cap():
 
 async def test_rejects_unexpected_content_types():
     def handler(request):
-        return httpx.Response(200, content=b"%PDF-1.4", headers={"content-type": "application/pdf"})
+        return httpx.Response(
+            200, content=b"%PDF-1.4", headers={"content-type": "application/pdf"}
+        )
 
     async with client_returning(handler) as client:
         with pytest.raises(ApiError) as caught:
-            await safe_fetch("https://example.com/f.pdf", timeout_s=5, max_bytes=1000, client=client)
+            await safe_fetch(
+                "https://example.com/f.pdf", timeout_s=5, max_bytes=1000, client=client
+            )
+
+    assert caught.value.code == "unsupported_content_type"
+
+
+async def test_rejects_a_response_with_no_content_type():
+    """Fail closed: if the server will not say what it sent, do not ingest it."""
+
+    def handler(request):
+        return httpx.Response(200, content=b"who knows", headers={})
+
+    async with client_returning(handler) as client:
+        with pytest.raises(ApiError) as caught:
+            await safe_fetch("https://example.com/x", timeout_s=5, max_bytes=1000, client=client)
 
     assert caught.value.code == "unsupported_content_type"
 
