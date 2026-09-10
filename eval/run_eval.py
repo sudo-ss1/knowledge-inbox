@@ -16,13 +16,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from app.config import Settings  # noqa: E402
-from app.rag.answerer import Answerer, OpenAILlm  # noqa: E402
-from app.rag.chunker import chunk_text  # noqa: E402
-from app.rag.embedder import build_embedder  # noqa: E402
-from app.rag.retriever import Retriever  # noqa: E402
-from app.store.db import connect  # noqa: E402
-from app.store.repository import ChunkRepository, ItemRepository  # noqa: E402
+from app.config import Settings
+from app.rag.answerer import Answerer, OpenAILlm
+from app.rag.chunker import chunk_text
+from app.rag.embedder import build_embedder
+from app.rag.retriever import Retriever
+from app.store.db import connect
+from app.store.repository import ChunkRepository, ItemRepository
 
 EVAL_DIR = Path(__file__).resolve().parent
 THRESHOLD_CANDIDATES = [round(0.05 + 0.005 * step, 4) for step in range(111)]
@@ -190,7 +190,13 @@ async def main() -> None:
                     f"  {question['id']}  top={rows[-1]['top_score']:.4f}"
                     f"  abstained={result.abstained}"
                 )
-            except Exception as exc:
+            except KeyError:
+                # A bad relevant_item_ids label (or a BM25-ranked doc id with no
+                # matching item) is a data bug in the golden set, not a transient
+                # API error -- let it surface as itself rather than being folded
+                # into the "reporting what we have" partial-run path below.
+                raise
+            except Exception as exc:  # noqa: BLE001 -- deliberately broad, see comment below
                 # A paid run that fails partway should still report what it already
                 # bought, rather than aborting with a traceback and losing every row.
                 print(f"  ! {question['id']} failed: {exc} -- reporting {len(rows)} rows so far")
@@ -198,13 +204,16 @@ async def main() -> None:
 
         await conn.close()
 
-    _report(rows, settings)
+    _report(rows, settings, expected_questions=len(golden))
 
 
-def _report(rows: list[dict], settings: Settings) -> None:
+def _report(rows: list[dict], settings: Settings, expected_questions: int) -> None:
     if not rows:
         print("\nNo rows were collected -- nothing to report.")
         return
+
+    if len(rows) != expected_questions:
+        print(f"\n*** PARTIAL RUN -- {len(rows)} of {expected_questions} questions ***")
 
     answerable = [row for row in rows if row["answerable"]]
     unanswerable = [row for row in rows if not row["answerable"]]
@@ -250,7 +259,7 @@ def _report(rows: list[dict], settings: Settings) -> None:
 
     print(f"\n== Threshold calibration (shipping {settings.abstain_threshold}) ==")
     print(f"  best threshold {best_threshold} at accuracy {best_accuracy}")
-    if abs(best_threshold - settings.abstain_threshold) > 0.02:
+    if abs(best_threshold - settings.abstain_threshold) > 0.01:
         print(f"  -> consider setting ABSTAIN_THRESHOLD={best_threshold}")
 
 
