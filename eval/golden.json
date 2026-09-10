@@ -88,5 +88,23 @@
     "question": "what's the wifi password for the downtown office?",
     "relevant_item_ids": [],
     "answerable": false
+  },
+  {
+    "id": "q16",
+    "question": "why would raising a kafka producer's linger.ms setting trade a bit of latency for better throughput?",
+    "relevant_item_ids": ["doc_kafka_producer_batching"],
+    "answerable": true
+  },
+  {
+    "id": "q17",
+    "question": "after updating a static asset on our site, why might visitors keep seeing the old version until something is manually purged at the edge?",
+    "relevant_item_ids": ["doc_cdn_cache_invalidation"],
+    "answerable": true
+  },
+  {
+    "id": "q18",
+    "question": "how can I tell whether postgres actually used the index I expected, instead of a sequential scan, for a specific query?",
+    "relevant_item_ids": ["doc_postgres_explain_analyze"],
+    "answerable": true
   }
 ]

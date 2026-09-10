@@ -47,18 +47,25 @@ def reciprocal_rank(ranked_item_ids: list[str], relevant: set[str]) -> float:
 
 
 def sweep_threshold(rows: list[dict], candidates: list[float]) -> tuple[float, float]:
-    """Pick the abstention threshold that best separates answerable from not."""
-    best_threshold, best_accuracy = candidates[0], -1.0
+    """Pick the accuracy-maximizing cutoff, breaking ties by margin.
+
+    When a clean gap separates answerable from unanswerable top scores, many
+    candidates tie on accuracy. Preferring the one furthest from every observed
+    score turns an arbitrary pick into a maximum-margin choice.
+    """
+    if not rows:
+        return candidates[0], 0.0
+
+    scored = []
     for threshold in candidates:
         correct = sum(
-            1
-            for row in rows
-            if (row["top_score"] >= threshold) == bool(row["answerable"])
+            1 for row in rows if (row["top_score"] >= threshold) == bool(row["answerable"])
         )
-        accuracy = correct / len(rows)
-        if accuracy > best_accuracy:
-            best_threshold, best_accuracy = threshold, accuracy
-    return best_threshold, round(best_accuracy, 4)
+        margin = min(abs(row["top_score"] - threshold) for row in rows)
+        scored.append((correct / len(rows), margin, threshold))
+
+    accuracy, _, threshold = max(scored)
+    return threshold, round(accuracy, 4)
 
 
 async def _ingest_corpus(corpus, items, chunks, embedder, settings) -> dict[str, str]:

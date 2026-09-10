@@ -47,14 +47,31 @@ def test_sweep_picks_the_threshold_that_separates_best():
     assert accuracy == 1.0
 
 
+def test_sweep_breaks_accuracy_ties_by_choosing_the_widest_margin():
+    """Several candidates in a clean gap all score 1.0 accuracy; the widest-margin
+    one (furthest from every observed score) should win, not merely the first
+    or lowest one that reaches perfect accuracy."""
+    rows = [
+        {"answerable": True, "top_score": 0.8},
+        {"answerable": True, "top_score": 0.7},
+        {"answerable": False, "top_score": 0.2},
+        {"answerable": False, "top_score": 0.1},
+    ]
+
+    threshold, accuracy = sweep_threshold(rows, [0.15, 0.3, 0.5, 0.7, 0.75])
+
+    assert threshold == 0.5
+    assert accuracy == 1.0
+
+
 def test_the_corpus_and_golden_set_are_consistent():
     corpus = load_corpus(EVAL_DIR / "corpus" / "corpus.json")
     golden = load_golden(EVAL_DIR / "golden.json")
     known_ids = {doc["id"] for doc in corpus}
 
-    assert len(corpus) >= 15
-    assert len(golden) >= 15
-    assert sum(1 for q in golden if not q["answerable"]) >= 3
+    assert len(corpus) >= 18
+    assert len(golden) >= 18
+    assert sum(1 for q in golden if not q["answerable"]) >= 4
 
     for question in golden:
         for item_id in question["relevant_item_ids"]:

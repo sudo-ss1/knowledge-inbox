@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     chunk_target_tokens: int = 400
     chunk_overlap_tokens: int = 60
     retrieval_top_k: int = 5
-    abstain_threshold: float = 0.35
+    abstain_threshold: float = 0.425
     fetch_timeout_s: float = 10.0
     fetch_max_bytes: int = 2_097_152
     log_level: str = "INFO"
