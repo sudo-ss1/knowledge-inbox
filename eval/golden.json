@@ -91,13 +91,13 @@
   },
   {
     "id": "q16",
-    "question": "why would raising a kafka producer's linger.ms setting trade a bit of latency for better throughput?",
+    "question": "our kafka client sends one record per request and the broker is overwhelmed by request volume; what setting makes it wait a moment and group records together?",
     "relevant_item_ids": ["doc_kafka_producer_batching"],
     "answerable": true
   },
   {
     "id": "q17",
-    "question": "after updating a static asset on our site, why might visitors keep seeing the old version until something is manually purged at the edge?",
+    "question": "we shipped a new build of our site hours ago and some visitors still get the old bundle even though the origin is already updated - what has to happen for them to see the new one?",
     "relevant_item_ids": ["doc_cdn_cache_invalidation"],
     "answerable": true
   },

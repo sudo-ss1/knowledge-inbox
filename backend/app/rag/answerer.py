@@ -82,6 +82,9 @@ class AnswerResult:
     citations: list[Citation]
     abstained: bool
     timings_ms: dict[str, float]
+    markers_emitted: int = 0
+    markers_invented: int = 0
+    abstain_reason: str | None = None
 
 
 def build_prompt(question: str, hits: list[Hit]) -> str:
@@ -160,11 +163,16 @@ class Answerer:
                 top_score=round(top_score, 4),
                 hits=len(hits),
             )
-            return AnswerResult(ABSTENTION_MESSAGE, [], True, timings)
+            return AnswerResult(
+                ABSTENTION_MESSAGE, [], True, timings, abstain_reason="below_threshold"
+            )
 
         started = time.perf_counter()
         raw = await self._llm.complete(SYSTEM_PROMPT, build_prompt(question, hits))
         timings["llm"] = _elapsed_ms(started)
+
+        emitted = [int(marker) for marker in _MARKER.findall(raw)]
+        invented = [number for number in emitted if not (1 <= number <= len(hits))]
 
         if _looks_like_a_refusal(raw):
             log.info(
@@ -173,7 +181,15 @@ class Answerer:
                 reason="model_declined",
                 top_score=round(top_score, 4),
             )
-            return AnswerResult(ABSTENTION_MESSAGE, [], True, timings)
+            return AnswerResult(
+                ABSTENTION_MESSAGE,
+                [],
+                True,
+                timings,
+                markers_emitted=len(emitted),
+                markers_invented=len(invented),
+                abstain_reason="model_declined",
+            )
 
         cleaned, citations = validate_citations(raw, hits)
         if not citations:
@@ -183,7 +199,15 @@ class Answerer:
                 reason="no_valid_citations",
                 top_score=round(top_score, 4),
             )
-            return AnswerResult(ABSTENTION_MESSAGE, [], True, timings)
+            return AnswerResult(
+                ABSTENTION_MESSAGE,
+                [],
+                True,
+                timings,
+                markers_emitted=len(emitted),
+                markers_invented=len(invented),
+                abstain_reason="no_valid_citations",
+            )
 
         log.info(
             "query_answered",
@@ -192,7 +216,15 @@ class Answerer:
             citations=len(citations),
             **{f"t_{key}": value for key, value in timings.items()},
         )
-        return AnswerResult(cleaned, citations, False, timings)
+        return AnswerResult(
+            cleaned,
+            citations,
+            False,
+            timings,
+            markers_emitted=len(emitted),
+            markers_invented=len(invented),
+            abstain_reason=None,
+        )
 
 
 def _elapsed_ms(started: float) -> float:

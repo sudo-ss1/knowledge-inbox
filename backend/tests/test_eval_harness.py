@@ -5,6 +5,7 @@ EVAL_DIR = Path(__file__).resolve().parents[2] / "eval"
 sys.path.insert(0, str(EVAL_DIR))
 
 from run_eval import (
+    Bm25,
     load_corpus,
     load_golden,
     recall_at_k,
@@ -62,6 +63,36 @@ def test_sweep_breaks_accuracy_ties_by_choosing_the_widest_margin():
 
     assert threshold == 0.5
     assert accuracy == 1.0
+
+
+def test_bm25_ranks_the_obviously_matching_document_first():
+    docs = {
+        "cats": "cats are small domesticated felines that like to nap all day",
+        "cars": "cars are motor vehicles with wheels and an engine",
+        "boats": "boats float on water and are propelled by engines or sails",
+    }
+    bm25 = Bm25(docs)
+
+    ranked = bm25.rank("tell me about domesticated felines that nap")
+
+    assert ranked[0] == "cats"
+
+
+def test_bm25_idf_downweights_a_term_common_to_every_document():
+    """A term in every document, with equal frequency and document length,
+    should not distinguish them -- ranking on it alone falls back to a stable
+    tie rather than to that term. A term unique to one document should still
+    dominate. This is what confirms IDF is actually wired up, not skipped."""
+    docs = {
+        "alpha": "widget widget widget alpha",
+        "bravo": "widget widget widget bravo",
+        "charlie": "widget widget widget charlie",
+    }
+    bm25 = Bm25(docs)
+
+    assert bm25.rank("widget") == ["alpha", "bravo", "charlie"]
+    assert bm25.rank("bravo")[0] == "bravo"
+    assert bm25.rank("charlie")[0] == "charlie"
 
 
 def test_the_corpus_and_golden_set_are_consistent():

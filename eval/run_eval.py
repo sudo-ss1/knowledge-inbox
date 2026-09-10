@@ -6,8 +6,11 @@ Needs OPENAI_API_KEY -- the corpus is pinned, but embedding it is a real call.
 
 import asyncio
 import json
+import math
+import re
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +26,45 @@ from app.store.repository import ChunkRepository, ItemRepository  # noqa: E402
 
 EVAL_DIR = Path(__file__).resolve().parent
 THRESHOLD_CANDIDATES = [round(0.05 + 0.025 * step, 4) for step in range(23)]
+
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(text: str) -> list[str]:
+    return _TOKEN.findall(text.lower())
+
+
+class Bm25:
+    """Okapi BM25 over whole documents. A deliberately unintelligent baseline:
+    if dense retrieval cannot beat it, the corpus is not exercising embeddings."""
+
+    def __init__(self, docs: dict[str, str], k1: float = 1.5, b: float = 0.75) -> None:
+        self._k1, self._b = k1, b
+        self._doc_tokens = {doc_id: _tokens(text) for doc_id, text in docs.items()}
+        self._lengths = {doc_id: len(toks) for doc_id, toks in self._doc_tokens.items()}
+        self._avg_len = sum(self._lengths.values()) / max(1, len(self._lengths))
+        self._tf = {doc_id: Counter(toks) for doc_id, toks in self._doc_tokens.items()}
+        self._df: Counter = Counter()
+        for toks in self._doc_tokens.values():
+            self._df.update(set(toks))
+        self._n = len(self._doc_tokens)
+
+    def rank(self, question: str) -> list[str]:
+        """Document ids, best first."""
+        scores: dict[str, float] = {}
+        for doc_id in self._doc_tokens:
+            score = 0.0
+            for term in _tokens(question):
+                freq = self._tf[doc_id].get(term, 0)
+                if not freq:
+                    continue
+                idf = math.log(1 + (self._n - self._df[term] + 0.5) / (self._df[term] + 0.5))
+                norm = freq + self._k1 * (
+                    1 - self._b + self._b * self._lengths[doc_id] / self._avg_len
+                )
+                score += idf * (freq * (self._k1 + 1)) / norm
+            scores[doc_id] = score
+        return sorted(scores, key=lambda doc_id: -scores[doc_id])
 
 
 def load_corpus(path: Path) -> list[dict]:
@@ -98,6 +140,7 @@ async def main() -> None:
 
     corpus = load_corpus(EVAL_DIR / "corpus" / "corpus.json")
     golden = load_golden(EVAL_DIR / "golden.json")
+    bm25 = Bm25({doc["id"]: f"{doc['title']} {doc['content']}" for doc in corpus})
 
     with tempfile.TemporaryDirectory() as workdir:
         conn = await connect(str(Path(workdir) / "eval.db"))
@@ -117,28 +160,41 @@ async def main() -> None:
         rows = []
         print(f"\nRunning {len(golden)} questions")
         for question in golden:
-            relevant = {doc_to_item[doc_id] for doc_id in question["relevant_item_ids"]}
-            hits = await retriever.search(question["question"], top_k=10)
-            ranked = list(dict.fromkeys(hit.item_id for hit in hits))
-            result = await answerer.answer(question["question"], top_k=settings.retrieval_top_k)
+            try:
+                relevant = {doc_to_item[doc_id] for doc_id in question["relevant_item_ids"]}
+                hits = await retriever.search(question["question"], top_k=10)
+                ranked = list(dict.fromkeys(hit.item_id for hit in hits))
+                bm25_ranked = [doc_to_item[doc_id] for doc_id in bm25.rank(question["question"])]
+                result = await answerer.answer(
+                    question["question"], top_k=settings.retrieval_top_k
+                )
 
-            markers_valid = all(
-                1 <= citation.marker <= settings.retrieval_top_k for citation in result.citations
-            )
-            rows.append(
-                {
-                    "id": question["id"],
-                    "answerable": question["answerable"],
-                    "top_score": round(float(hits[0].score) if hits else 0.0, 4),
-                    "recall@5": recall_at_k(ranked, relevant, 5),
-                    "recall@10": recall_at_k(ranked, relevant, 10),
-                    "rr": reciprocal_rank(ranked, relevant),
-                    "abstained": result.abstained,
-                    "citations": len(result.citations),
-                    "citations_valid": markers_valid,
-                }
-            )
-            print(f"  {question['id']}  top={rows[-1]['top_score']:.3f}  abstained={result.abstained}")
+                rows.append(
+                    {
+                        "id": question["id"],
+                        "answerable": question["answerable"],
+                        "top_score": round(float(hits[0].score) if hits else 0.0, 4),
+                        "recall@5": recall_at_k(ranked, relevant, 5),
+                        "recall@10": recall_at_k(ranked, relevant, 10),
+                        "rr": reciprocal_rank(ranked, relevant),
+                        "bm25_recall@5": recall_at_k(bm25_ranked, relevant, 5),
+                        "bm25_rr": reciprocal_rank(bm25_ranked, relevant),
+                        "abstained": result.abstained,
+                        "citations": len(result.citations),
+                        "markers_emitted": result.markers_emitted,
+                        "markers_invented": result.markers_invented,
+                        "abstain_reason": result.abstain_reason,
+                    }
+                )
+                print(
+                    f"  {question['id']}  top={rows[-1]['top_score']:.3f}"
+                    f"  abstained={result.abstained}"
+                )
+            except Exception as exc:
+                # A paid run that fails partway should still report what it already
+                # bought, rather than aborting with a traceback and losing every row.
+                print(f"  ! {question['id']} failed: {exc} -- reporting {len(rows)} rows so far")
+                break
 
         await conn.close()
 
@@ -146,9 +202,13 @@ async def main() -> None:
 
 
 def _report(rows: list[dict], settings: Settings) -> None:
+    if not rows:
+        print("\nNo rows were collected -- nothing to report.")
+        return
+
     answerable = [row for row in rows if row["answerable"]]
     unanswerable = [row for row in rows if not row["answerable"]]
-    answered = [row for row in rows if not row["abstained"]]
+    llm_called = [row for row in rows if row["abstain_reason"] != "below_threshold"]
 
     def mean(values: list[float]) -> float:
         return round(sum(values) / len(values), 4) if values else 0.0
@@ -157,17 +217,31 @@ def _report(rows: list[dict], settings: Settings) -> None:
     correct_answers = sum(1 for row in answerable if not row["abstained"])
     best_threshold, best_accuracy = sweep_threshold(rows, THRESHOLD_CANDIDATES)
 
-    print("\n== Retrieval (answerable questions only) ==")
-    print(f"  recall@5   {mean([row['recall@5'] for row in answerable]):.3f}")
-    print(f"  recall@10  {mean([row['recall@10'] for row in answerable]):.3f}")
-    print(f"  MRR        {mean([row['rr'] for row in answerable]):.3f}")
-
-    print("\n== Grounding ==")
+    print("\n== Retrieval: dense vs BM25 baseline (answerable questions only) ==")
+    print("                  dense    bm25")
     print(
-        f"  citation validity  "
-        f"{mean([1.0 if row['citations_valid'] else 0.0 for row in answered]):.3f}"
+        f"  recall@5        {mean([row['recall@5'] for row in answerable]):.3f}"
+        f"    {mean([row['bm25_recall@5'] for row in answerable]):.3f}"
     )
-    print(f"  answers with >=1 citation  {sum(1 for row in answered if row['citations'])}/{len(answered)}")
+    print(
+        f"  MRR             {mean([row['rr'] for row in answerable]):.3f}"
+        f"    {mean([row['bm25_rr'] for row in answerable]):.3f}"
+    )
+    print(f"  recall@10 (dense only, near-vacuous at this corpus size)  "
+          f"{mean([row['recall@10'] for row in answerable]):.3f}")
+
+    emitted_total = sum(row["markers_emitted"] for row in llm_called)
+    invented_total = sum(row["markers_invented"] for row in llm_called)
+    invented_rate = round(invented_total / emitted_total, 4) if emitted_total else 0.0
+    zero_citation_downgrades = sum(
+        1 for row in rows if row["abstain_reason"] == "no_valid_citations"
+    )
+
+    print("\n== Grounding (measured against raw model output) ==")
+    print(f"  markers emitted            {emitted_total}")
+    print(f"  invented markers dropped   {invented_total}  (rate {invented_rate:.3f})")
+    print(f"  answers downgraded to abstention for zero valid citations   "
+          f"{zero_citation_downgrades}")
 
     print("\n== Abstention ==")
     print(f"  correct refusals   {correct_abstentions}/{len(unanswerable)}")
