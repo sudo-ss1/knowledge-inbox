@@ -198,3 +198,22 @@ async def test_upstream_error_status_is_a_502():
 
     assert caught.value.code == "fetch_failed"
     assert caught.value.http_status == 502
+
+
+async def test_a_permanent_404_is_mapped_outside_the_transient_5xx_family():
+    """Only upstream 5xx and 429 map to a 502 (transient, worth the pipeline's
+    one retry). Everything else in the 4xx family -- a dead link, a paywall --
+    is permanent and must not be mapped into the retryable 502 bucket."""
+
+    def handler(request):
+        return httpx.Response(404, text="not found")
+
+    async with client_returning(handler) as client:
+        with pytest.raises(ApiError) as caught:
+            await safe_fetch(
+                "https://example.com/gone", timeout_s=5, max_bytes=1000, client=client
+            )
+
+    assert caught.value.code == "fetch_failed"
+    assert caught.value.http_status != 502
+    assert 400 <= caught.value.http_status < 500

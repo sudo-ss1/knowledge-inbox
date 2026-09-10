@@ -76,7 +76,10 @@ async def test_a_fetch_failure_marks_the_item_failed_with_a_readable_reason(wiri
     async def fetch(url, **kwargs):
         raise ApiError("fetch_failed", "Upstream returned HTTP 404.", 502)
 
-    await pipeline_with(items, chunks, settings, fetch).process(item.id)
+    pipeline = pipeline_with(items, chunks, settings, fetch)
+    # A 502 is transient and gets retried; this test asserts terminal state, not timing.
+    pipeline.retry_delay_s = 0
+    await pipeline.process(item.id)
 
     reloaded = await items.get(item.id)
     assert reloaded.status == "failed"
@@ -131,6 +134,29 @@ async def test_a_permanent_failure_is_not_retried(wiring):
         nonlocal attempts
         attempts += 1
         raise ApiError("blocked_host", "Refusing to fetch a non-public address.", 400)
+
+    pipeline = pipeline_with(items, chunks, settings, fetch)
+    pipeline.retry_delay_s = 0
+    await pipeline.process(item.id)
+
+    assert attempts == 1
+    assert (await items.get(item.id)).status == "failed"
+
+
+async def test_a_permanent_4xx_from_the_fetcher_costs_a_single_attempt(wiring):
+    """A dead link (fetcher.py maps a non-5xx, non-429 upstream status to a
+    422, not the transient-eligible 502) must not cost a second fetch and a
+    retry sleep -- it can never succeed."""
+    items, chunks, settings = wiring
+    item = await items.create(
+        type="url", source_url="https://example.com/gone", title=None, raw_content=None
+    )
+    attempts = 0
+
+    async def fetch(url, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise ApiError("fetch_failed", "Upstream returned HTTP 404.", 422)
 
     pipeline = pipeline_with(items, chunks, settings, fetch)
     pipeline.retry_delay_s = 0

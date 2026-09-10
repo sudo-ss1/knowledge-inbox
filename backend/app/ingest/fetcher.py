@@ -93,9 +93,15 @@ async def safe_fetch(
                     current = str(httpx.URL(current).join(location))
                     continue
                 if response.status_code >= 400:
-                    raise ApiError(
-                        "fetch_failed", f"Upstream returned HTTP {response.status_code}.", 502
-                    )
+                    # 5xx and 429 are the upstream's own transient failures, worth
+                    # the pipeline's one retry -- map those to a 502 so
+                    # `_is_transient` retries them. Any other 4xx is permanent (a
+                    # bad URL, a paywall, a dead link): map it into the 4xx family
+                    # so it is not retried, wasting a fetch and a 2s sleep on a
+                    # request that will never succeed.
+                    upstream = response.status_code
+                    status = 502 if upstream >= 500 or upstream == 429 else 422
+                    raise ApiError("fetch_failed", f"Upstream returned HTTP {upstream}.", status)
                 _assert_supported_type(response)
                 body = await _read_capped(response, max_bytes)
 
