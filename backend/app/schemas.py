@@ -78,3 +78,25 @@ def to_summary(item: Item) -> ItemSummary:
 
 def to_detail(item: Item) -> ItemDetail:
     return ItemDetail(**to_summary(item).model_dump(), raw_content=item.raw_content)
+
+
+class QueryRequest(BaseModel):
+    question: Annotated[str, Field(min_length=3, max_length=1000)]
+    top_k: Annotated[int, Field(ge=1, le=20)] | None = None
+
+
+class Source(BaseModel):
+    marker: int
+    item_id: str
+    chunk_id: str
+    title: str | None
+    source: str | None
+    snippet: str
+    score: float
+
+
+class QueryResponse(BaseModel):
+    answer: str
+    sources: list[Source]
+    abstained: bool
+    timings_ms: dict[str, float]

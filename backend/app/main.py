@@ -4,13 +4,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes_items import router as items_router
+from .api.routes_query import router as query_router
 from .config import get_settings
 from .errors import install_error_handlers
 from .ingest.pipeline import IngestPipeline, recover_pending
 from .ingest.queue import IngestQueue
 from .logging import configure_logging, get_logger
 from .middleware import RequestContextMiddleware
+from .rag.answerer import Answerer, OpenAILlm
 from .rag.embedder import build_embedder
+from .rag.retriever import Retriever
 from .store.db import connect
 from .store.repository import ChunkRepository, ItemRepository
 
@@ -24,6 +27,13 @@ async def lifespan(app: FastAPI):
     items, chunks = ItemRepository(conn), ChunkRepository(conn)
     embedder = build_embedder(settings)
 
+    retriever = Retriever(chunks, embedder)
+    llm = (
+        OpenAILlm(settings.openai_api_key, settings.openai_chat_model)
+        if settings.openai_api_key
+        else None
+    )
+
     pipeline = IngestPipeline(items=items, chunks=chunks, embedder=embedder, settings=settings)
     queue = IngestQueue(handler=pipeline.process, workers=settings.ingest_workers)
     await queue.start()
@@ -34,6 +44,10 @@ async def lifespan(app: FastAPI):
     app.state.chunks = chunks
     app.state.embedder = embedder
     app.state.queue = queue
+    app.state.retriever = retriever
+    app.state.answerer = Answerer(
+        retriever=retriever, llm=llm, threshold=settings.abstain_threshold
+    )
     log.info("startup_complete", db=settings.db_path, embed_model=embedder.model)
     try:
         yield
@@ -57,6 +71,7 @@ def create_app() -> FastAPI:
     )
     install_error_handlers(app)
     app.include_router(items_router)
+    app.include_router(query_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

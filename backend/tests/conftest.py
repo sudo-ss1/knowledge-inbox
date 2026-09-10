@@ -28,12 +28,21 @@ async def context(tmp_path):
     items, chunks = ItemRepository(conn), ChunkRepository(conn)
     embedder = FakeEmbedder(dim=32)
 
+    from app.rag.answerer import Answerer, FakeLlm
+    from app.rag.retriever import Retriever
+
     app = create_app()
     app.state.settings = settings
     app.state.items = items
     app.state.chunks = chunks
     app.state.embedder = embedder
     app.state.queue = RecordingQueue()
+    app.state.retriever = Retriever(chunks, embedder)
+    app.state.answerer = Answerer(
+        retriever=app.state.retriever,
+        llm=FakeLlm("stub answer [1]."),
+        threshold=settings.abstain_threshold,
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

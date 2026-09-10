@@ -18,3 +18,7 @@ def get_chunks(request: Request) -> ChunkRepository:
 
 def get_queue(request: Request):
     return request.app.state.queue
+
+
+def get_answerer(request: Request):
+    return request.app.state.answerer
