@@ -79,18 +79,18 @@ def test_bm25_ranks_the_obviously_matching_document_first():
 
 
 def test_bm25_idf_downweights_a_term_common_to_every_document():
-    """A term present in every document should contribute close to no ranking
-    signal, while a term unique to one document should dominate. These four
-    documents are built so a naive TF-only scorer (summing raw term
-    frequency, ignoring IDF) would rank 'decoy' first: it repeats the
-    everywhere-term 'common' five times against 'target's one occurrence of
-    'common' plus one occurrence of 'rare', which appears in no other
-    document. Real IDF weighting flips that -- 'rare' has df=1 against
-    'common's df=4, so its high IDF should push 'target' to the top. Asserting
-    BM25's actual order (not just that it differs from TF-only) is what
-    confirms IDF is wired up, not merely present in the formula."""
+    """'target' contains only the rare term 'rare' (df=1, unique to it);
+    'decoy' repeats the everywhere-term 'common' (df=3) five times. Both
+    documents match exactly one term of the query 'common rare', so a naive
+    TF-only scorer (summing raw term frequency, ignoring IDF) would rank
+    'decoy' first on its higher raw count (5 occurrences vs 1). Real IDF
+    weighting gives 'rare' a far higher weight than 'common' precisely
+    because it is unique to 'target', which is enough to overturn that raw
+    frequency gap and put 'target' first instead. Asserting BM25's actual
+    order (not just that it differs from TF-only) is what confirms IDF is
+    wired up, not merely present in the formula."""
     docs = {
-        "target": "common rare",
+        "target": "rare",
         "decoy": "common common common common common",
         "filler_a": "common apple",
         "filler_b": "common banana",
