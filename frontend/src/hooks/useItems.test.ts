@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "../api/client";
@@ -48,7 +48,9 @@ describe("useItems", () => {
     await waitFor(() => expect(result.current.hasPending).toBe(true));
     const callsAfterMount = vi.mocked(api.listItems).mock.calls.length;
 
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2);
+    });
 
     expect(vi.mocked(api.listItems).mock.calls.length).toBeGreaterThan(callsAfterMount);
   });
@@ -60,7 +62,9 @@ describe("useItems", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     const callsAfterMount = vi.mocked(api.listItems).mock.calls.length;
 
-    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+    });
 
     expect(vi.mocked(api.listItems).mock.calls.length).toBe(callsAfterMount);
   });
