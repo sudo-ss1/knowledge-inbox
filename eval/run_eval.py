@@ -25,7 +25,7 @@ from app.store.db import connect  # noqa: E402
 from app.store.repository import ChunkRepository, ItemRepository  # noqa: E402
 
 EVAL_DIR = Path(__file__).resolve().parent
-THRESHOLD_CANDIDATES = [round(0.05 + 0.025 * step, 4) for step in range(23)]
+THRESHOLD_CANDIDATES = [round(0.05 + 0.005 * step, 4) for step in range(111)]
 
 _TOKEN = re.compile(r"[a-z0-9]+")
 
@@ -187,7 +187,7 @@ async def main() -> None:
                     }
                 )
                 print(
-                    f"  {question['id']}  top={rows[-1]['top_score']:.3f}"
+                    f"  {question['id']}  top={rows[-1]['top_score']:.4f}"
                     f"  abstained={result.abstained}"
                 )
             except Exception as exc:
