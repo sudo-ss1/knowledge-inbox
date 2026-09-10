@@ -1,6 +1,14 @@
+import itertools
+
 from app.rag.chunker import chunk_text, count_tokens, split_sentences
 
 SENTENCE = "Consumer group membership changed and the coordinator triggered a rebalance. "
+
+# Distinct sentences, so a set intersection actually means shared content.
+DISTINCT_SENTENCES = [
+    f"Idea {index} covers a separate topic worth remembering here." for index in range(80)
+]
+DISTINCT_TEXT = " ".join(DISTINCT_SENTENCES)
 
 
 def test_a_short_note_is_never_split():
@@ -40,19 +48,35 @@ def test_chunks_never_break_mid_sentence():
         assert chunk.text.lstrip().startswith("Consumer")
 
 
-def test_consecutive_chunks_overlap():
-    chunks = chunk_text(SENTENCE * 60, target_tokens=100, overlap_tokens=40)
+def test_consecutive_chunks_overlap_at_a_contiguous_seam():
+    chunks = chunk_text(DISTINCT_TEXT, target_tokens=100, overlap_tokens=40)
 
-    first_sentences = set(split_sentences(chunks[0].text))
-    second_sentences = set(split_sentences(chunks[1].text))
-    assert first_sentences & second_sentences
+    first = split_sentences(chunks[0].text)
+    second = split_sentences(chunks[1].text)
+    shared = len(set(first) & set(second))
+
+    assert shared > 0
+    # The shared sentences must be the tail of one chunk and the head of the next,
+    # not merely present in both.
+    assert first[-shared:] == second[:shared]
+
+
+def test_zero_overlap_shares_no_sentences():
+    """Sensitivity check: proves the overlap tests above can actually fail."""
+    chunks = chunk_text(DISTINCT_TEXT, target_tokens=100, overlap_tokens=0)
+
+    for earlier, later in itertools.pairwise(chunks):
+        assert not set(split_sentences(earlier.text)) & set(split_sentences(later.text))
 
 
 def test_overlap_is_bounded_by_the_setting():
-    chunks = chunk_text(SENTENCE * 60, target_tokens=100, overlap_tokens=20)
+    chunks = chunk_text(DISTINCT_TEXT, target_tokens=100, overlap_tokens=40)
 
-    shared = set(split_sentences(chunks[0].text)) & set(split_sentences(chunks[1].text))
-    assert sum(count_tokens(s) for s in shared) <= 20 + count_tokens(SENTENCE)
+    first = split_sentences(chunks[0].text)
+    second = split_sentences(chunks[1].text)
+    shared = len(set(first) & set(second))
+
+    assert sum(count_tokens(sentence) for sentence in second[:shared]) <= 40
 
 
 def test_a_single_oversized_sentence_is_hard_split():

@@ -2,6 +2,7 @@
 
 setup:
 	cd backend && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+	cd backend && .venv/bin/python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 	cd frontend && npm install
 
 backend:
