@@ -90,7 +90,12 @@ only in the eval as a baseline — next time I'd wire it into the actual
 retriever from day one, since it already matches dense retrieval here and
 hybrid would be nearly free to add. No streaming answers, no dedup on saving
 a URL twice, no headless browser — a JavaScript-rendered page fails with a
-readable message instead of saving an empty item.
+readable message instead of saving an empty item. The SSRF guard resolves
+the hostname to check it's public, then `httpx` resolves it again on
+connect — a hostile authoritative server could answer differently between
+the two lookups, and closing that TOCTOU gap properly is out of scope here.
+The API's keyset pagination on `/items` is implemented and tested, but the
+frontend only ever fetches the first page — there's no "load more" in the UI.
 
 At scale the first things to break are the O(N) query scan, the single
 SQLite writer, and the in-process queue. In that order.

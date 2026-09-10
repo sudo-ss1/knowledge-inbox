@@ -123,7 +123,7 @@ match.
   `doc_kafka_rebalance`. Measured content-word overlap: 12 words
   (`broker`, `group`, `kafka`, `record`, `records`, `request`, `sends`,
   `setting`, `together`, `wait`, ...) with the target versus 4
-  (`broker`, `by`, `group`, `kafka`) with the rebalancing decoy — the decoy
+  (`broker`, `group`, `kafka`, `one`) with the rebalancing decoy — the decoy
   shares only the generic Kafka vocabulary, not anything about batching.
 - **q17** — *"we shipped a new build of our site hours ago and some
   visitors still get the old bundle even though the origin is already
@@ -172,10 +172,16 @@ password. Their `relevant_item_ids` are `[]`.
   length normalization, no embeddings, no external dependency) built over
   each document's title and full text. It's run against the same 14
   answerable questions and scored with the same `recall_at_k` /
-  `reciprocal_rank` functions, so dense and lexical retrieval are directly
-  comparable. The point of running it is falsifiability: if dense retrieval
-  can't beat a deliberately unintelligent lexical matcher, the corpus isn't
-  actually exercising what embeddings are for.
+  `reciprocal_rank` functions, so dense and lexical retrieval are comparable
+  but not symmetric: BM25 indexes each document's title plus its full text,
+  while the dense path embeds only chunk `content` (titles are carried as
+  hit metadata, not embedded). That asymmetry hands BM25 an extra signal
+  dense retrieval doesn't get — a title-word match the chunk text itself
+  doesn't contain — which if anything favors BM25, not dense retrieval, so
+  it doesn't undercut the parity result below. The point of running it is
+  falsifiability: if dense retrieval can't beat a deliberately unintelligent
+  lexical matcher, the corpus isn't actually exercising what embeddings are
+  for.
 - **Grounding, measured against raw model output** — before this round, the
   eval reported "citation validity" and "answers with ≥1 citation," and
   both numbers were guaranteed to be perfect by construction:
@@ -232,6 +238,13 @@ that is discussed below because of what it revealed.
   correct answers    14/14
   accuracy           1.000
 ```
+
+A perfect 1.000/1.000 against real API calls is not nothing: it establishes
+that chunking, embedding, cosine ranking, citation validation, and the
+abstention gate all function correctly end to end, on real model output, not
+just in unit tests against fakes. What it does not establish is how any of
+that behaves on a larger or denser corpus than this one — see "What this
+eval does not measure" for the caveats that still apply to this result.
 
 **Getting here took an intermediate, honestly-reported regression, and the
 regression is more informative than the clean final number.** Immediately
