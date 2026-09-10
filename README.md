@@ -4,7 +4,7 @@ Save a note or a link, then ask questions about what you saved. Answers come
 back with citations pointing at the passages they came from, and when
 nothing you've saved is relevant it says so instead of guessing.
 
-Built for the Turium take-home, in about a day.
+Built as a take-home exercise, in about a day.
 
 ## Running it
 
