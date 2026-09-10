@@ -157,6 +157,51 @@ async def test_the_model_declining_is_reported_as_an_abstention():
     assert result.citations == []
 
 
+async def test_a_grounded_single_citation_reports_emitted_and_invented_counts():
+    answerer = Answerer(
+        retriever=StubRetriever(HITS), llm=FakeLlm("Membership changed [1]."), threshold=0.2
+    )
+
+    result = await answerer.answer("why rebalance?", top_k=2)
+
+    assert result.markers_emitted == 1
+    assert result.markers_invented == 0
+    assert result.abstain_reason is None
+
+
+async def test_one_invented_marker_among_two_emitted_is_counted_as_invented():
+    answerer = Answerer(
+        retriever=StubRetriever(HITS),
+        llm=FakeLlm("Claim [1] and invention [7]."),
+        threshold=0.2,
+    )
+
+    result = await answerer.answer("why rebalance?", top_k=2)
+
+    assert result.markers_emitted == 2
+    assert result.markers_invented == 1
+
+
+async def test_an_answer_citing_only_an_invented_marker_reports_no_valid_citations():
+    answerer = Answerer(
+        retriever=StubRetriever(HITS), llm=FakeLlm("It happens because of [9]."), threshold=0.2
+    )
+
+    result = await answerer.answer("why?", top_k=2)
+
+    assert result.markers_invented == 1
+    assert result.abstain_reason == "no_valid_citations"
+
+
+async def test_a_below_threshold_abstention_reports_its_reason():
+    weak = [Hit("a", "itm_a", "text", "T", None, 0.05)]
+    answerer = Answerer(retriever=StubRetriever(weak), llm=FakeLlm("anything"), threshold=0.25)
+
+    result = await answerer.answer("unrelated question", top_k=5)
+
+    assert result.abstain_reason == "below_threshold"
+
+
 async def test_timings_report_the_embed_retrieve_and_llm_split():
     answerer = Answerer(
         retriever=StubRetriever(HITS), llm=FakeLlm("Grounded [1]."), threshold=0.2

@@ -137,7 +137,7 @@ def _looks_like_a_refusal(answer: str) -> bool:
 
 
 class Answerer:
-    def __init__(self, *, retriever, llm: LlmClient, threshold: float) -> None:
+    def __init__(self, *, retriever, llm: LlmClient | None, threshold: float) -> None:
         self._retriever = retriever
         self._llm = llm
         self._threshold = threshold

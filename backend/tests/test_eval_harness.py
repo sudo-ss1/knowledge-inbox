@@ -79,20 +79,25 @@ def test_bm25_ranks_the_obviously_matching_document_first():
 
 
 def test_bm25_idf_downweights_a_term_common_to_every_document():
-    """A term in every document, with equal frequency and document length,
-    should not distinguish them -- ranking on it alone falls back to a stable
-    tie rather than to that term. A term unique to one document should still
-    dominate. This is what confirms IDF is actually wired up, not skipped."""
+    """A term present in every document should contribute close to no ranking
+    signal, while a term unique to one document should dominate. These four
+    documents are built so a naive TF-only scorer (summing raw term
+    frequency, ignoring IDF) would rank 'decoy' first: it repeats the
+    everywhere-term 'common' five times against 'target's one occurrence of
+    'common' plus one occurrence of 'rare', which appears in no other
+    document. Real IDF weighting flips that -- 'rare' has df=1 against
+    'common's df=4, so its high IDF should push 'target' to the top. Asserting
+    BM25's actual order (not just that it differs from TF-only) is what
+    confirms IDF is wired up, not merely present in the formula."""
     docs = {
-        "alpha": "widget widget widget alpha",
-        "bravo": "widget widget widget bravo",
-        "charlie": "widget widget widget charlie",
+        "target": "common rare",
+        "decoy": "common common common common common",
+        "filler_a": "common apple",
+        "filler_b": "common banana",
     }
     bm25 = Bm25(docs)
 
-    assert bm25.rank("widget") == ["alpha", "bravo", "charlie"]
-    assert bm25.rank("bravo")[0] == "bravo"
-    assert bm25.rank("charlie")[0] == "charlie"
+    assert bm25.rank("common rare")[0] == "target"
 
 
 def test_the_corpus_and_golden_set_are_consistent():
