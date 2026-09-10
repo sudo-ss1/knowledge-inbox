@@ -166,6 +166,10 @@ class ChunkRepository:
     ) -> None:
         if len(chunks) != len(vectors):
             raise ApiError("chunk_vector_mismatch", "Chunk and vector counts disagree.", 500)
+        # Idempotent by item_id: a crash between insert_many and mark_ready leaves the
+        # item 'pending', so recover_pending re-enqueues and reprocesses it. Without
+        # this delete, that second pass would append a duplicate copy of every chunk.
+        await self._conn.execute("DELETE FROM chunks WHERE item_id = ?", (item_id,))
         rows = [
             (
                 new_id("chk"),

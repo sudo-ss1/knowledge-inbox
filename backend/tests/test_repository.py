@@ -101,6 +101,29 @@ async def test_pending_ids_supports_startup_recovery(conn):
     assert await items.pending_ids() == [stuck.id]
 
 
+async def test_reinserting_chunks_for_an_item_replaces_rather_than_duplicates(conn):
+    items, chunks = ItemRepository(conn), ChunkRepository(conn)
+    item = await items.create(type="note", source_url=None, title="t", raw_content="body")
+    vector = [np.array([1.0, 0.0], dtype=np.float32)]
+
+    await chunks.insert_many(
+        item.id, [Chunk(0, "first pass", 2)], vector, "fake-embed"
+    )
+    await chunks.insert_many(
+        item.id,
+        [Chunk(0, "second pass a", 3), Chunk(1, "second pass b", 3)],
+        vector * 2,
+        "fake-embed",
+    )
+
+    assert await chunks.count_for(item.id) == 2
+    await items.mark_ready(item.id)  # load_ready only shows chunks of ready items
+    rows = await chunks.load_ready()
+    texts = {row.text for row in rows}
+    assert texts == {"second pass a", "second pass b"}
+    assert "first pass" not in texts
+
+
 async def test_deleting_an_item_cascades_to_its_chunks(conn):
     items, chunks = ItemRepository(conn), ChunkRepository(conn)
     item = await items.create(type="note", source_url=None, title="t", raw_content="b")

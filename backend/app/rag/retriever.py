@@ -50,7 +50,21 @@ class Retriever:
         if len(models) > 1:
             log.warning("mixed_embed_models", models=sorted(models))
 
-        matrix = np.vstack([from_blob(row.embedding) for row in rows])
+        stored = [from_blob(row.embedding) for row in rows]
+        dims = {v.shape[0] for v in stored}
+        if len(dims) > 1:
+            # Rows were embedded by more than one model/dimension. Stacking these
+            # into one matrix would raise a raw ValueError, so surface the same
+            # user-facing error the single-dimension-vs-query mismatch below does --
+            # to a user both are "re-ingest, your embeddings don't match".
+            raise ApiError(
+                "embedding_dim_mismatch",
+                "Stored embeddings were built with a different model. "
+                "Re-ingest your items or restore the previous OPENAI_EMBED_MODEL.",
+                409,
+            )
+
+        matrix = np.vstack(stored)
         if matrix.shape[1] != vector.shape[0]:
             raise ApiError(
                 "embedding_dim_mismatch",

@@ -41,10 +41,10 @@ async def _ready_item(items, chunks, embedder, *, title, texts, source_url=None)
 async def test_search_ranks_the_relevant_chunk_first(repos):
     items, chunks = repos
     embedder = FakeEmbedder(dim=256)
+    await _ready_item(items, chunks, embedder, title="Bread", texts=["sourdough starter hydration"])
     await _ready_item(
         items, chunks, embedder, title="Kafka", texts=["consumer group rebalance coordinator"]
     )
-    await _ready_item(items, chunks, embedder, title="Bread", texts=["sourdough starter hydration"])
 
     hits = await Retriever(chunks, embedder).search("kafka consumer rebalance", top_k=2)
 
@@ -113,6 +113,20 @@ async def test_a_dimension_mismatch_is_a_409_telling_the_user_to_reingest(repos)
     assert caught.value.code == "embedding_dim_mismatch"
     assert caught.value.http_status == 409
     assert "re-ingest" in caught.value.message.lower()
+
+
+async def test_genuinely_mixed_dimensions_raise_embedding_dim_mismatch_not_valueerror(repos):
+    items, chunks = repos
+    small = FakeEmbedder(dim=32, model="model-a")
+    await _ready_item(items, chunks, small, title="Small", texts=["stored small"])
+    big = FakeEmbedder(dim=64, model="model-b")
+    await _ready_item(items, chunks, big, title="Big", texts=["stored big"])
+
+    with pytest.raises(ApiError) as caught:
+        await Retriever(chunks, big).search("anything", top_k=2)
+
+    assert caught.value.code == "embedding_dim_mismatch"
+    assert caught.value.http_status == 409
 
 
 async def test_scores_are_cosine_similarities_in_range(repos):
