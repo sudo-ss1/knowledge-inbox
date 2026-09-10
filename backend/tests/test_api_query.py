@@ -73,12 +73,13 @@ async def test_an_abstention_is_a_200_not_an_error(context):
     )
 
     assert res.status_code == 200
-    assert res.json() == {
-        "answer": ABSTENTION_MESSAGE,
-        "sources": [],
-        "abstained": True,
-        "timings_ms": res.json()["timings_ms"],
-    }
+    body = res.json()
+    assert body["answer"] == ABSTENTION_MESSAGE
+    assert body["sources"] == []
+    assert body["abstained"] is True
+    # Asserted directly: abstention is a distinct early-return branch in the answerer.
+    assert set(body["timings_ms"]) == {"embed", "retrieve", "llm"}
+    assert body["timings_ms"]["llm"] == 0.0
 
 
 async def test_querying_an_empty_inbox_abstains(context):
@@ -117,11 +118,11 @@ async def test_an_explicit_top_k_is_honored(context):
 @pytest.mark.parametrize(
     "payload",
     [
-        {"question": "hi"},
-        {"question": ""},
-        {},
-        {"question": "valid question", "top_k": 0},
-        {"question": "valid question", "top_k": 99},
+        {"question": "hi"},  # under min_length
+        {},  # missing required field
+        {"question": "x" * 1001},  # over max_length
+        {"question": "valid question", "top_k": 0},  # top_k below ge
+        {"question": "valid question", "top_k": 99},  # top_k above le
     ],
 )
 async def test_invalid_query_payloads_are_422(context, payload):
@@ -131,6 +132,40 @@ async def test_invalid_query_payloads_are_422(context, payload):
 
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "validation_error"
+
+
+async def test_a_three_character_question_is_accepted(context):
+    """min_length=3 is inclusive; the shortest legal question must not 422."""
+    _install_answerer(context, "x")
+
+    res = await context["client"].post("/query", json={"question": "why"})
+
+    assert res.status_code == 200
+    assert res.json()["abstained"] is True
+
+
+async def test_each_marker_maps_to_its_own_source(context):
+    """A citation pointing at the wrong source is the worst failure this feature has."""
+    seeded = {}
+    for title, text in (
+        ("Kafka", "alpha beta rebalance coordinator details"),
+        ("SQLite", "alpha beta write ahead logging details"),
+    ):
+        item = await _seed_ready_item(context, title=title, text=text)
+        seeded[item.id] = (title, text)
+    _install_answerer(context, "First [1]. Second [2].")
+
+    body = (
+        await context["client"].post("/query", json={"question": "alpha beta", "top_k": 2})
+    ).json()
+
+    sources = body["sources"]
+    assert [s["marker"] for s in sources] == [1, 2]
+    assert len({s["item_id"] for s in sources}) == 2
+    for source in sources:
+        expected_title, expected_text = seeded[source["item_id"]]
+        assert source["title"] == expected_title
+        assert source["snippet"] == expected_text
 
 
 async def test_query_without_a_key_is_a_503(context):
