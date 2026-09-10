@@ -7,6 +7,7 @@ import numpy as np
 
 from ..errors import ApiError
 from ..rag.chunker import Chunk
+from ..rag.embedder import to_blob
 
 _ITEM_COLUMNS = """
   i.id, i.type, i.source_url, i.title, i.raw_content, i.status, i.error,
@@ -172,7 +173,7 @@ class ChunkRepository:
                 chunk.ordinal,
                 chunk.text,
                 chunk.token_count,
-                np.asarray(vector, dtype=np.float32).tobytes(),
+                to_blob(vector),
                 embed_model,
             )
             for chunk, vector in zip(chunks, vectors)
