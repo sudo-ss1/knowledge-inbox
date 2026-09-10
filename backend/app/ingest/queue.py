@@ -1,8 +1,10 @@
-"""A bounded in-process job queue.
+"""An in-process job queue with a bounded number of workers.
 
 Two workers is deliberate: it caps concurrent embedding calls so a bulk paste
-of URLs degrades into a slower queue rather than a wall of 429s. The handler
-is injected, so this module knows nothing about items or databases.
+of URLs degrades into a slower queue rather than a wall of 429s. The queue
+itself (`asyncio.Queue()`) has no maxsize -- it's concurrency that's bounded,
+not backlog. The handler is injected, so this module knows nothing about
+items or databases.
 """
 
 import asyncio
@@ -44,7 +46,8 @@ class IngestQueue:
         await self._queue.put(item_id)
 
     async def drain(self) -> None:
-        """Wait for the backlog to clear. Used by tests and shutdown."""
+        """Wait for the backlog to clear. Used by tests only -- shutdown calls
+        `stop()`, which cancels workers instead of waiting for them to finish."""
         await self._queue.join()
 
     async def _worker(self, index: int) -> None:

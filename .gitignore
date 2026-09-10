@@ -11,4 +11,4 @@ data/
 *.db
 *.db-wal
 *.db-shm
-.superpowers/
+*.egg-info/

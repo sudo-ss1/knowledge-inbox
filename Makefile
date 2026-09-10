@@ -22,4 +22,4 @@ eval:
 	cd backend && .venv/bin/python ../eval/run_eval.py
 
 lint:
-	cd backend && .venv/bin/ruff check app tests
+	cd backend && .venv/bin/ruff check app tests ../eval
