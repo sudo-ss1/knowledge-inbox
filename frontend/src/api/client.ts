@@ -21,10 +21,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   const raw = await response.text();
-  const body = raw ? JSON.parse(raw) : null;
+
+  let body: unknown = null;
+  if (raw) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      // A non-JSON body means something upstream of the API answered — most often
+      // the dev proxy when the backend isn't running.
+      throw new ApiError(
+        "unreadable_response",
+        `Could not read the server's response (HTTP ${response.status}). Is the API running?`,
+        undefined,
+        response.status,
+      );
+    }
+  }
 
   if (!response.ok) {
-    const envelope = body?.error;
+    const envelope = (body as { error?: { code?: string; message?: string; request_id?: string } } | null)?.error;
     throw new ApiError(
       envelope?.code ?? "unknown_error",
       envelope?.message ?? `Request failed with status ${response.status}.`,
