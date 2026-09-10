@@ -1,0 +1,59 @@
+import type { IngestAccepted, ItemsPage, QueryResponse } from "../types";
+
+const BASE = import.meta.env.VITE_API_BASE ?? "";
+
+export class ApiError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public requestId?: string,
+    public status?: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+
+  const raw = await response.text();
+  const body = raw ? JSON.parse(raw) : null;
+
+  if (!response.ok) {
+    const envelope = body?.error;
+    throw new ApiError(
+      envelope?.code ?? "unknown_error",
+      envelope?.message ?? `Request failed with status ${response.status}.`,
+      envelope?.request_id,
+      response.status,
+    );
+  }
+
+  return body as T;
+}
+
+export const api = {
+  ingestNote: (content: string) =>
+    request<IngestAccepted>("/ingest", {
+      method: "POST",
+      body: JSON.stringify({ type: "note", content }),
+    }),
+
+  ingestUrl: (url: string) =>
+    request<IngestAccepted>("/ingest", {
+      method: "POST",
+      body: JSON.stringify({ type: "url", url }),
+    }),
+
+  listItems: () => request<ItemsPage>("/items"),
+
+  ask: (question: string) =>
+    request<QueryResponse>("/query", {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+};
