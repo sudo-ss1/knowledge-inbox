@@ -1,8 +1,11 @@
 import hashlib
 import re
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from ..config import Settings
 
 _WORD = re.compile(r"[a-z0-9]+")
 
@@ -81,3 +84,26 @@ class FakeEmbedder:
             digest = hashlib.md5(word.encode()).digest()
             vector[int.from_bytes(digest[:4], "big") % self._dim] += 1.0
         return normalize(vector)
+
+
+class UnavailableEmbedder:
+    """Stands in when no API key is configured, so failures are explicit."""
+
+    @property
+    def model(self) -> str:
+        return "unavailable"
+
+    async def embed(self, texts: list[str]) -> list[np.ndarray]:
+        from ..errors import ApiError
+
+        raise ApiError(
+            "embedder_unavailable",
+            "Embeddings are not configured. Set OPENAI_API_KEY and restart.",
+            503,
+        )
+
+
+def build_embedder(settings: "Settings") -> Embedder:
+    if not settings.openai_api_key:
+        return UnavailableEmbedder()
+    return OpenAIEmbedder(settings.openai_api_key, settings.openai_embed_model)

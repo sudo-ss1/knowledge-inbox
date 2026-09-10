@@ -1,17 +1,53 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.routes_items import router as items_router
 from .config import get_settings
 from .errors import install_error_handlers
-from .logging import configure_logging
+from .ingest.pipeline import IngestPipeline, recover_pending
+from .ingest.queue import IngestQueue
+from .logging import configure_logging, get_logger
 from .middleware import RequestContextMiddleware
+from .rag.embedder import build_embedder
+from .store.db import connect
+from .store.repository import ChunkRepository, ItemRepository
+
+log = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    conn = await connect(settings.db_path)
+    items, chunks = ItemRepository(conn), ChunkRepository(conn)
+    embedder = build_embedder(settings)
+
+    pipeline = IngestPipeline(items=items, chunks=chunks, embedder=embedder, settings=settings)
+    queue = IngestQueue(handler=pipeline.process, workers=settings.ingest_workers)
+    await queue.start()
+    await recover_pending(items, queue)
+
+    app.state.settings = settings
+    app.state.items = items
+    app.state.chunks = chunks
+    app.state.embedder = embedder
+    app.state.queue = queue
+    log.info("startup_complete", db=settings.db_path, embed_model=embedder.model)
+    try:
+        yield
+    finally:
+        await queue.stop()
+        await conn.close()
+        log.info("shutdown_complete")
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
-    app = FastAPI(title="AI Knowledge Inbox", version="0.1.0")
+    app = FastAPI(title="AI Knowledge Inbox", version="0.1.0", lifespan=lifespan)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -20,6 +56,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     install_error_handlers(app)
+    app.include_router(items_router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
