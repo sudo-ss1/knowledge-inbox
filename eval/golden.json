@@ -1,0 +1,92 @@
+[
+  {
+    "id": "q01",
+    "question": "what happens to a consumer's assigned partitions if it takes too long between poll calls?",
+    "relevant_item_ids": ["doc_kafka_rebalance"],
+    "answerable": true
+  },
+  {
+    "id": "q02",
+    "question": "does writing to a database in SQLite's WAL mode block other processes from reading it at the same time?",
+    "relevant_item_ids": ["doc_sqlite_wal"],
+    "answerable": true
+  },
+  {
+    "id": "q03",
+    "question": "how does a browser avoid re-downloading a resource that hasn't actually changed since it was last cached?",
+    "relevant_item_ids": ["doc_http_caching"],
+    "answerable": true
+  },
+  {
+    "id": "q04",
+    "question": "which kind of Postgres index should I reach for on a column full of jsonb documents?",
+    "relevant_item_ids": ["doc_postgres_indexes"],
+    "answerable": true
+  },
+  {
+    "id": "q05",
+    "question": "if my code wraps an awaited call in a catch-all exception handler, could that quietly stop an asyncio task from being cancellable?",
+    "relevant_item_ids": ["doc_asyncio_cancellation"],
+    "answerable": true
+  },
+  {
+    "id": "q06",
+    "question": "why might a command-line HTTP client reject a server's certificate even though the site loads fine in a browser?",
+    "relevant_item_ids": ["doc_tls_chain"],
+    "answerable": true
+  },
+  {
+    "id": "q07",
+    "question": "why does editing one line of application source sometimes force a container build to redo a slow dependency install?",
+    "relevant_item_ids": ["doc_docker_layers"],
+    "answerable": true
+  },
+  {
+    "id": "q08",
+    "question": "at what point does it actually start to matter whether you pick a dedicated vector store over an embedded index like pgvector?",
+    "relevant_item_ids": ["doc_vector_db"],
+    "answerable": true
+  },
+  {
+    "id": "q09",
+    "question": "does the CAP theorem mean a distributed database always has to sacrifice consistency, or only in specific circumstances?",
+    "relevant_item_ids": ["doc_cap_theorem"],
+    "answerable": true
+  },
+  {
+    "id": "q10",
+    "question": "since a stolen access token can't be individually revoked before it expires, how do systems limit the damage it can do?",
+    "relevant_item_ids": ["doc_jwt_expiry"],
+    "answerable": true
+  },
+  {
+    "id": "q11",
+    "question": "during a rolling update, why would kubernetes hold off sending traffic to a pod whose container is already running?",
+    "relevant_item_ids": ["doc_k8s_readiness"],
+    "answerable": true
+  },
+  {
+    "id": "q12",
+    "question": "what is our company's policy on expensing client dinners while traveling?",
+    "relevant_item_ids": [],
+    "answerable": false
+  },
+  {
+    "id": "q13",
+    "question": "what's the internal runbook for rolling back a bad production deploy?",
+    "relevant_item_ids": [],
+    "answerable": false
+  },
+  {
+    "id": "q14",
+    "question": "who is on call for the payments team this week?",
+    "relevant_item_ids": [],
+    "answerable": false
+  },
+  {
+    "id": "q15",
+    "question": "what's the wifi password for the downtown office?",
+    "relevant_item_ids": [],
+    "answerable": false
+  }
+]
