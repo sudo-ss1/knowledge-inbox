@@ -55,6 +55,44 @@ async def test_unknown_path_uses_the_envelope(client):
     assert set(res.json()["error"]) == {"code", "message", "request_id"}
 
 
+async def test_unhandled_exception_still_carries_request_id():
+    app = create_app()
+
+    @app.get("/crash")
+    async def crash():
+        raise RuntimeError("boom")
+
+    # ASGITransport re-raises app exceptions by default; we need the actual
+    # 500 response the app's own ServerErrorMiddleware produces.
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        res = await c.get("/crash", headers={"X-Request-Id": "req_crash"})
+
+    assert res.status_code == 500
+    body = res.json()
+    assert body["error"]["code"] == "internal_error"
+    assert body["error"]["request_id"] == "req_crash"
+    assert res.headers["x-request-id"] == "req_crash"
+
+
+async def test_unhandled_exception_generates_request_id_when_absent():
+    app = create_app()
+
+    @app.get("/crash")
+    async def crash():
+        raise RuntimeError("boom")
+
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        res = await c.get("/crash")
+
+    assert res.status_code == 500
+    body = res.json()
+    request_id = body["error"]["request_id"]
+    assert isinstance(request_id, str) and request_id.startswith("req_")
+    assert res.headers["x-request-id"] == request_id
+
+
 def test_logs_are_single_line_json_with_request_id(capsys):
     configure_logging("INFO")
     token = request_id_var.set("req_test")

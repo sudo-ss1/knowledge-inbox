@@ -7,8 +7,6 @@ from typing import Any
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
-_RESERVED = {"fields"}
-
 
 class JsonFormatter(logging.Formatter):
     """One event per line. Structured fields ride in record.fields."""
@@ -40,7 +38,7 @@ class EventLogger:
     def warning(self, event: str, **fields: Any) -> None:
         self._log.warning(event, extra={"fields": fields})
 
-    def error(self, event: str, exc_info: bool = False, **fields: Any) -> None:
+    def error(self, event: str, exc_info: bool | BaseException = False, **fields: Any) -> None:
         self._log.error(event, exc_info=exc_info, extra={"fields": fields})
 
 
