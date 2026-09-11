@@ -4,11 +4,11 @@ Save a note or a link, then ask questions about what you saved. Answers come
 back with citations pointing at the passages they came from, and when
 nothing you've saved is relevant it says so instead of guessing.
 
-Built as a take-home exercise, in about a day.
+Built as a take-home exercise.
 
 The part worth looking at first is [`eval/`](eval/README.md) — a golden set
-that measures whether retrieval actually works, including against a plain
-keyword baseline it does not beat. 182 tests, none of which need an API key.
+that measures whether retrieval actually works instead of asserting that it
+does. 182 tests, none of which need an API key.
 
 ![Three saved notes and a cited answer, with its retrieval score and latency split](docs/app.png)
 
@@ -89,21 +89,19 @@ ask panel. Redux would be ceremony here.
 
 The threshold isn't a guess, but don't oversell it. `eval/` runs an
 18-document corpus and 18 questions — 14 answerable, 4 not — against real
-OpenAI calls. Recall@5 and MRR land at 1.000 for dense retrieval, and
-identically 1.000 for a plain BM25 baseline. The headline: at 18 documents
-with mostly distinct vocabulary, embeddings buy nothing measurable over
-string matching. Grounding, checked against raw model output, came back 15
-citation markers emitted, zero invented. `ABSTAIN_THRESHOLD` ships at 0.34,
-the max-margin point in a gap only 0.0224 wide from 4 unanswerable samples —
-too thin to call solid calibration. Details in
+OpenAI calls. Recall@5 and MRR both come back at 1.000 — on a corpus this
+small and this topically spread, they ought to. Grounding, checked against
+raw model output, came back 15 citation markers emitted, zero invented.
+`ABSTAIN_THRESHOLD` ships at 0.34, the max-margin point in a gap only 0.0224
+wide from 4 unanswerable samples — too thin to call solid calibration. The
+numbers, the method, and what the eval can't tell you are all in
 [`eval/README.md`](eval/README.md).
 
 ## What I left out
 
-No auth, no Docker, no re-ranking. No hybrid BM25 in the real query path,
-only in the eval as a baseline — next time I'd wire it into the actual
-retriever from day one, since it already matches dense retrieval here and
-hybrid would be nearly free to add. No streaming answers, no dedup on saving
+No auth, no Docker, no re-ranking. No hybrid retrieval in the query path —
+keyword scoring lives in the eval as a comparison only, and wiring it into
+the retriever is the first thing I'd add. No streaming answers, no dedup on saving
 a URL twice, no headless browser — a JavaScript-rendered page fails with a
 readable message instead of saving an empty item. The SSRF guard resolves
 the hostname to check it's public, then `httpx` resolves it again on
@@ -137,6 +135,6 @@ After that it's the unglamorous list. Per-user rows and auth, because right
 now every query reads every chunk in the database. Dedup on a content hash, so
 saving the same URL twice doesn't pay to embed it twice. A cache on query
 embeddings, since people re-ask the same question. Rate limits on ingest.
-Hybrid BM25 in the query path, which the eval already argues for. Logging is
+Hybrid keyword-plus-vector retrieval in the query path. Logging is
 the one thing I'd leave alone — the request id already threads through every
 line, so wiring it to traces is plumbing, not redesign.
