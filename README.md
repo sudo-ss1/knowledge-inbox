@@ -10,6 +10,13 @@ The part worth looking at first is [`eval/`](eval/README.md) — a golden set
 that measures whether retrieval actually works, including against a plain
 keyword baseline it does not beat. 182 tests, none of which need an API key.
 
+![The app: a refused URL showing why, two indexed notes, and a cited answer](docs/app.png)
+
+That screenshot is a real run, not a mockup. The red row is the SSRF guard
+refusing a link-local address and saying so on the item; the answer cites the
+note it came from, with the retrieval score and the embed/retrieve/model split
+underneath.
+
 ## Running it
 
 You need Python 3.12, Node 20 or newer, and an OpenAI key.
