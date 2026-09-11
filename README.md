@@ -29,6 +29,12 @@ caches it — the only network `make test` needs afterward, since the embedder
 and the LLM are fakes there. No API key needed for `make test`. `make eval`
 needs one; it calls the real API.
 
+If you'd rather not spend anything: `make test` exercises the whole system
+offline, and [`eval/README.md`](eval/README.md) carries the measured numbers
+from a real run. There's no offline demo mode, and that's deliberate — hashed
+embeddings would let you click around, but you'd be judging retrieval this
+system doesn't use, and grounded citation is the point of it.
+
 ## The API
 
 `POST /ingest` takes `{"type":"note","content":"…"}` or
