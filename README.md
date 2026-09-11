@@ -10,12 +10,10 @@ The part worth looking at first is [`eval/`](eval/README.md) — a golden set
 that measures whether retrieval actually works, including against a plain
 keyword baseline it does not beat. 182 tests, none of which need an API key.
 
-![The app: a refused URL showing why, two indexed notes, and a cited answer](docs/app.png)
+![Three saved notes and a cited answer, with its retrieval score and latency split](docs/app.png)
 
-That screenshot is a real run, not a mockup. The red row is the SSRF guard
-refusing a link-local address and saying so on the item; the answer cites the
-note it came from, with the retrieval score and the embed/retrieve/model split
-underneath.
+A real run, not a mockup — the answer cites the note it came from, and the
+score and embed/retrieve/model split are what the API actually returned.
 
 ## Running it
 
@@ -113,6 +111,16 @@ connect — a hostile authoritative server could answer differently between
 the two lookups, and closing that TOCTOU gap properly is out of scope here.
 The API's keyset pagination on `/items` is implemented and tested, but the
 frontend only ever fetches the first page — there's no "load more" in the UI.
+
+## When something fails
+
+![An item refused by the SSRF guard, with the reason shown on the row](docs/failure.png)
+
+Nothing fails quietly. That's the SSRF guard turning down a link-local
+address — the shape of URL that otherwise walks into a cloud metadata
+endpoint — and the reason sits on the item, not only in the log. A bad key,
+an unreachable API and a rate limit each say which one happened, because
+"something went wrong" is useless to whoever has to fix it.
 
 ## If this went to production
 
