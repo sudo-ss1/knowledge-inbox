@@ -97,5 +97,21 @@ the two lookups, and closing that TOCTOU gap properly is out of scope here.
 The API's keyset pagination on `/items` is implemented and tested, but the
 frontend only ever fetches the first page — there's no "load more" in the UI.
 
+## If this went to production
+
 At scale the first things to break are the O(N) query scan, the single
 SQLite writer, and the in-process queue. In that order.
+
+So Postgres with pgvector first — that clears the first two at once, and
+since retrieval sits behind one narrow interface it's a file, not a rewrite.
+Then a real broker with workers in their own process, so ingestion survives a
+deploy and stops competing with request handling. Those two are most of the
+scaling story.
+
+After that it's the unglamorous list. Per-user rows and auth, because right
+now every query reads every chunk in the database. Dedup on a content hash, so
+saving the same URL twice doesn't pay to embed it twice. A cache on query
+embeddings, since people re-ask the same question. Rate limits on ingest.
+Hybrid BM25 in the query path, which the eval already argues for. Logging is
+the one thing I'd leave alone — the request id already threads through every
+line, so wiring it to traces is plumbing, not redesign.
