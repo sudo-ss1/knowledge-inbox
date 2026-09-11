@@ -6,6 +6,10 @@ nothing you've saved is relevant it says so instead of guessing.
 
 Built as a take-home exercise, in about a day.
 
+The part worth looking at first is [`eval/`](eval/README.md) — a golden set
+that measures whether retrieval actually works, including against a plain
+keyword baseline it does not beat. 182 tests, none of which need an API key.
+
 ## Running it
 
 You need Python 3.12, Node 20 or newer, and an OpenAI key.
